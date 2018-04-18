@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+
+    <style>
+        .edgePath path {
+            stroke: #18a4da;
+            stroke-width: 2px;
+        }
+
+        .edgePath polyline {
+            stroke: #18a4da;
+            stroke-width: 1.5px;
+        }
+
+        .node rect {
+            fill: white;
+            stroke-width: 1.5px;
+            stroke: #666;
+        }
+
+        text,
+        .messure {
+            font-weight: 400;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serf;
+            font-size: 14px;
+            padding: 10px;
+            fill: #333;
+        }
+
+        .messure {
+            display: inline-block;
+        }
+
+        .noPaddingMessure {
+            display: inline-block;
+            font-weight: 400;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serf;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        .endnode rect {
+            fill: #f4f4f4;
+        }
+    </style>
+</head>
+
+<body>
+    <svg id="flowChart"></svg>
+</body>
+<script>
+
+    const data = [{
+        label: '规则包',
+        children: [
+            {
+                label: '分群包（1500）',
+                children: [
+                    {
+                        label: '分群1包（700）',
+                        condition: '哈sidf',
+                        children: [{
+                            label: '大夫',
+                            children: [{ label: 'END', type: 'end' },
+                            {
+                                label: '大夫大夫大夫',
+                                children: [
+                                    { label: '嗲吃发的士阿斯顿' },
+                                    { label: '啊互粉的' },
+                                    { label: '啊互粉的fdas' }
+                                ]
+                            }]
+                        }, { label: '大夫大夫大夫大夫大夫大夫大夫大夫', children: [{ label: 'END', type: 'end' }] }]
+                    },
+                    {
+                        label: '分群2包（800）',
+                        children: [{ label: '发 i 多久啊发都十', children: [{ label: '哈哈 i 的方法 i' }] }]
+                    }, {
+                        label: 'END',
+                        type: 'end'
+                    }
+                ]
+            }
+        ]
+    }]
+
+    function createFlow(data, id) {
+
+        let maxWidth = 0;
+        let maxHeight = 0;
+        const gutter = 40 // 横向间隔
+        const verticalGuttter = 120 //纵向间隔
+        const fontGutter = 5
+        const rectStrokeWidth = 1.5 //块border宽度 用于计算 line的起始坐标 需要 rectY + rectHeight + rectStrokeWidth/2
+        const rectHeight = 40
+        const arrowOriginHeight = 5
+        const endNodeLine = 60
+        let rects = ""
+        let lines = ""
+        //计算文本宽／高属性
+        function messureText(content, className) {
+            const span = document.createElement('span')
+            span.className = className
+            span.innerHTML = content
+            document.body.appendChild(span)
+            const width = span.offsetWidth
+            const height = span.offsetHeight
+            document.body.removeChild(span)
+            return { width, height }
+        }
+
+        //计算节点坐标
+        function coordinate(data, level = 0, initialX = 1, realWidth) {
+
+            // 对于end节点做处理
+            for (const node of data) {
+                if (node.children && node.children.length > 0) {
+                    const index = node.children.findIndex(c => c.type == "end")
+                    if (index !== -1) {
+                        node.endVO = node.children[index]
+                        node.children.splice(index, 1)
+                    }
+                }
+            }
+
+            // 计算坐标
+            for (const node of data) {
+                const rectWidth = messureText(node.label, 'messure').width
+                node.rectWidth = rectWidth
+                node.x = initialX
+                node.y = level * verticalGuttter + rectStrokeWidth / 2
+                maxHeight = Math.max(maxHeight, node.y + rectHeight + rectStrokeWidth / 2)
+                node.level = level
+                node.realWidth = Math.max(realWidth || 0, rectWidth)
+
+                //end 节点 方向设置， 以及实际宽度 增加
+                if (node.endVO) {
+                    if (node.children.length === 0) {
+                        node.endDirect = 'bottom'
+                    } else if (level !== 0 && data.length > 1 && node.x === 1) {
+                        node.endDirect = 'left'
+                    } else {
+                        node.endDirect = 'right'
+                        node.realWidth = Math.max(node.realWidth, node.rectWidth + endNodeLine + arrowOriginHeight * rectStrokeWidth + messureText(node.endVO.label || 'END', 'noPaddingMessure').width)
+                    }
+                }
+
+                if (node.children && node.children.length > 0) {
+                    coordinate(node.children, level + 1, initialX, realWidth)
+                    let newX = initialX
+                    for (const item of node.children) {
+                        newX += item.realWidth + gutter
+                    }
+                    node.realWidth = Math.max(node.realWidth, newX - initialX - gutter)
+                }
+                initialX += node.realWidth + gutter
+            }
+        }
+
+        function moveToCenter(data) {
+            for (const node of data) {
+                if (node.children && node.children.length > 0) {
+                    moveToCenter(node.children)
+                    maxWidth = Math.max(maxWidth, node.x + node.realWidth)
+                    var start = node.children[0].x + node.children[0].rectWidth / 2
+                    var end = node.children[node.children.length - 1].x + node.children[node.children.length - 1].rectWidth / 2
+                    node.x = (start + end - node.rectWidth) / 2
+                }
+            }
+        }
+
+        function drawBlock(data) {
+            for (const node of data) {
+                rects += `<g class="node"> <rect rx="6" ry="6" x=${node.x} y=${node.y} width=${node.rectWidth} height=${rectHeight}></rect>
+                <g transform="translate(${node.x + 10},${node.y + 10})">
+                    <text>
+                        <tspan dy="1em">${node.label}</tspan>
+                    </text>
+                </g></g>`
+                if (node.children) {
+                    drawBlock(node.children)
+                }
+            }
+        }
+
+        function drawLine(data) {
+            for (const node of data) {
+                const px = node.x + node.rectWidth / 2
+                const py = node.y + rectHeight + rectStrokeWidth / 2
+                if (node.children && node.children.length > 0) {
+                    const num = node.children.length == 1 ? 1 : node.children.length == 2 ? 2 : 3
+                    for (let i = 0; i < node.children.length; i++) {
+                        const child = node.children[i]
+                        const cx = child.x + child.rectWidth / 2
+                        const cy = child.y
+                        let fx, fy, str = ""
+                        const condition = child.condition || '任意'
+                        const conditionWidth = messureText(condition, 'noPaddingMessure').width
+                        const conditionHeight = messureText(condition, 'noPaddingMessure').height
+                        let realLineHeight = verticalGuttter - rectHeight - rectStrokeWidth - arrowOriginHeight * Math.round(rectStrokeWidth)
+                        if (num == 1) {
+                            str = `v${realLineHeight}`
+                            fx = cx + fontGutter
+                            fy = cy - realLineHeight / 2
+                        }
+                        if (num == 2) {
+                            realLineHeight -= 12
+                            if (cx > px) {
+                                str = `v${realLineHeight / 2} c0 0 0 6 6 6 h${cx - px - 12} c0 0 6 0 6 6 v${realLineHeight / 2}`
+                            } else {
+                                str = `v${realLineHeight / 2} c0 0 0 6 -6 6 h${cx - px + 12} c0 0 -6 0 -6 6 v${realLineHeight / 2}`
+                            }
+                            fx = (px + cx) / 2 - conditionWidth / 2
+                            fy = cy - realLineHeight / 2 - conditionHeight - fontGutter
+                        }
+                        if (num == 3) {
+                            if (i === 0 || i === node.children.length - 1) {
+                                if (cx > px) {
+                                    str = `v${realLineHeight / 2} h${cx - px - 6} c0 0 6 0 6 6 v${realLineHeight / 2 - 6}`
+                                } else {
+                                    str = `v${realLineHeight / 2} h${cx - px + 6} c0 0 -6 0 -6 6 v${realLineHeight / 2 - 6}`
+                                }
+                            } else {
+                                str = `v${realLineHeight / 2} h${cx - px} v${realLineHeight / 2}`
+                            }
+                            fx = cx + fontGutter
+                            fy = cy - verticalGuttter / 4 + conditionHeight / 2
+                        }
+
+                        lines += `<g class="edgePath">
+                            <path d="M${px} ${py} ${str}" style="fill:none" marker-end="url(#arrow)"></path>
+                            <g transform="translate(${fx},${fy})">
+                                <text>
+                                    ${condition}
+                                </text>
+                            </g>
+                        </g>`
+                    }
+                    drawLine(node.children)
+                }
+            }
+        }
+
+
+        function drawEnd(data) {
+            for (const node of data) {
+                if (node.endVO) {
+                    let ex, ey, str, fx, fy;
+                    const condition = node.endVO.condition || '拒绝'
+                    const conditionWidth = messureText(condition, 'noPaddingMessure').width
+                    const conditionHeight = messureText(condition, 'noPaddingMessure').height
+                    let realLineHeight = verticalGuttter - rectHeight - rectStrokeWidth - arrowOriginHeight * Math.round(rectStrokeWidth)
+                    if (node.endDirect === 'bottom') {
+                        ex = node.x + node.rectWidth / 2;
+                        ey = node.y + rectHeight + rectStrokeWidth / 2;
+                        fx = ex + fontGutter;
+                        fy = ey + realLineHeight / 2 - conditionHeight / 2;
+                        str = `v${realLineHeight}`;
+                    }
+                    if (node.endDirect === 'left') {
+                        ex = node.x - rectStrokeWidth / 2;
+                        ey = node.y + rectHeight / 2;
+                        fx = ex - endNodeLine / 2 - conditionWidth / 2;
+                        fy = ey - conditionHeight;
+                        str = `h-${endNodeLine}`;
+                    }
+                    if (node.endDirect === 'right') {
+                        ex = node.x + node.rectWidth + rectStrokeWidth / 2;
+                        ey = node.y + rectHeight / 2;
+                        fx = ex + endNodeLine / 2 - conditionWidth / 2;
+                        fy = ey - conditionHeight;
+                        str = `h${endNodeLine}`;
+                    }
+                    lines += `<g class="edgePath">
+                        <path d="M${ex} ${ey} ${str}" style="fill:none" marker-end="url(#arrow)"></path>
+                        <g transform="translate(${fx},${fy})">
+                            <text>
+                                <tspan dy="1em">${condition}</tspan>
+                            </text>
+                        </g>
+                    </g>`
+
+
+                    let sx, sy
+                    const endBlockWidth = messureText(node.endVO.label || 'END', 'messure').width
+                    if (node.endDirect === 'bottom') {
+                        sx = node.x + node.rectWidth / 2 - endBlockWidth / 2;
+                        sy = node.y + verticalGuttter
+                    } else if (node.endDirect === 'left') {
+                        sx = node.x - (node.rectWidth + endNodeLine + 3 / 2 * rectStrokeWidth + arrowOriginHeight * Math.round(rectStrokeWidth));
+                        sy = node.y;
+                    } else {
+                        sx = node.x + node.rectWidth + endNodeLine + rectStrokeWidth / 2 + arrowOriginHeight * Math.round(rectStrokeWidth)
+                        sy = node.y;
+                    }
+                    rects += `<g class="node endnode">
+                            <rect rx="6" ry="6" x=${sx} y=${sy} width=${endBlockWidth} height=${rectHeight}></rect>
+                            <g transform="translate(${sx + 10},${sy + 10})">
+                                <text>
+                                    <tspan dy="1em">${node.endVO.label || 'END'}</tspan>
+                                </text>
+                            </g>
+                        </g>`
+                }
+                if (node.children && node.children.length > 0) {
+                    drawEnd(node.children)
+                }
+            }
+        }
+
+        coordinate(data)
+        console.log(data)
+        moveToCenter(data)
+        drawLine(data)
+        drawBlock(data)
+        drawEnd(data)
+        console.log(maxWidth)
+        document.getElementById(id).style = `width:${maxWidth}px;height:${maxHeight}px`
+        document.getElementById(id).innerHTML = `<defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refx="0" refy="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L5,3 z" fill="#18a4da" />
+            </marker>
+        </defs><g class="nodes">${rects}</g><g class="edgePaths">${lines}</g>`
+    }
+
+    createFlow(data, 'flowChart')
+
+</script>
+
+</html>
