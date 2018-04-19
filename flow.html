@@ -22,6 +22,7 @@
             fill: white;
             stroke-width: 1.5px;
             stroke: #666;
+            z-index: 10;
         }
 
         text,
@@ -31,6 +32,11 @@
             font-size: 14px;
             padding: 10px;
             fill: #333;
+        }
+
+        text,
+        tspan {
+            user-select: none;
         }
 
         .messure {
@@ -48,16 +54,47 @@
         .endnode rect {
             fill: #f4f4f4;
         }
+
+        #svgtooltip {
+            position: absolute;
+            display: none;
+            border-style: solid;
+            white-space: nowrap;
+            z-index: 9999999;
+            opacity: 0;
+            transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            background-color: rgba(50, 50, 50, 0.7);
+            border-width: 0px;
+            border-color: rgb(51, 51, 51);
+            border-radius: 4px;
+            color: rgb(255, 255, 255);
+            font-style: normal;
+            font-variant: normal;
+            font-weight: normal;
+            font-stretch: normal;
+            font-size: 14px;
+            font-family: sans-serif;
+            line-height: 21px;
+            padding: 5px;
+            left: 0;
+            top: 0;
+            pointer-events: none;
+        }
     </style>
 </head>
 
 <body>
-    <svg id="flowChart"></svg>
+
+    <div id="flowChart">
+
+    </div>
+
 </body>
 <script>
 
     const data = [{
         label: '规则包',
+        title: 'haha',
         children: [
             {
                 label: '分群包（1500）',
@@ -90,12 +127,12 @@
         ]
     }]
 
-    function createFlow(data, id) {
+    function createFlow(container, data, toolTipRender) {
 
         let maxWidth = 0;
         let maxHeight = 0;
         const gutter = 40 // 横向间隔
-        const verticalGuttter = 120 //纵向间隔
+        const verticalGuttter = 100 //纵向间隔
         const fontGutter = 5
         const rectStrokeWidth = 1.5 //块border宽度 用于计算 line的起始坐标 需要 rectY + rectHeight + rectStrokeWidth/2
         const rectHeight = 40
@@ -115,6 +152,10 @@
             return { width, height }
         }
 
+        function cutText(content) {
+            return content.length > 10 ? content.slice(0, 10) + '...' : content
+        }
+
         //计算节点坐标
         function coordinate(data, level = 0, initialX = 1, realWidth) {
 
@@ -131,7 +172,7 @@
 
             // 计算坐标
             for (const node of data) {
-                const rectWidth = messureText(node.label, 'messure').width
+                const rectWidth = messureText(cutText(node.label), 'messure').width
                 node.rectWidth = rectWidth
                 node.x = initialX
                 node.y = level * verticalGuttter + rectStrokeWidth / 2
@@ -175,12 +216,14 @@
             }
         }
 
+        let allNodes = []
         function drawBlock(data) {
             for (const node of data) {
-                rects += `<g class="node"> <rect rx="6" ry="6" x=${node.x} y=${node.y} width=${node.rectWidth} height=${rectHeight}></rect>
+                allNodes.push(node)
+                rects += `<g class="node" data-index="${allNodes.length - 1}"> <rect  rx="6" ry="6" x=${node.x} y=${node.y} width=${node.rectWidth} height=${rectHeight}></rect>
                 <g transform="translate(${node.x + 10},${node.y + 10})">
-                    <text>
-                        <tspan dy="1em">${node.label}</tspan>
+                    <text  >
+                        <tspan dy="1em">${cutText(node.label)}</tspan>
                     </text>
                 </g></g>`
                 if (node.children) {
@@ -207,7 +250,7 @@
                         if (num == 1) {
                             str = `v${realLineHeight}`
                             fx = cx + fontGutter
-                            fy = cy - realLineHeight / 2
+                            fy = cy - conditionHeight / 4 - realLineHeight / 2
                         }
                         if (num == 2) {
                             realLineHeight -= 12
@@ -285,8 +328,6 @@
                             </text>
                         </g>
                     </g>`
-
-
                     let sx, sy
                     const endBlockWidth = messureText(node.endVO.label || 'END', 'messure').width
                     if (node.endDirect === 'bottom') {
@@ -313,23 +354,87 @@
                 }
             }
         }
-
         coordinate(data)
-        console.log(data)
         moveToCenter(data)
         drawLine(data)
         drawBlock(data)
         drawEnd(data)
-        console.log(maxWidth)
-        document.getElementById(id).style = `width:${maxWidth}px;height:${maxHeight}px`
-        document.getElementById(id).innerHTML = `<defs>
+        container.innerHTML = `<svg style="cursor:default;width:${maxWidth}px;height:${maxHeight}px"><defs>
             <marker id="arrow" markerWidth="10" markerHeight="10" refx="0" refy="3" orient="auto" markerUnits="strokeWidth">
                 <path d="M0,0 L0,6 L5,3 z" fill="#18a4da" />
             </marker>
-        </defs><g class="nodes">${rects}</g><g class="edgePaths">${lines}</g>`
+        </defs><g id="flowNodes" class="nodes" onmousemove="handleSvgMouseOver(event)" onmouseout="handleSvgMouseOut(event)">${rects}</g><g class="edgePaths">${lines}</g></svg>`
+
+        const flowNodes = document.getElementById('flowNodes')
+        flowNodes.onmousemove = function (e) {
+
+            function getNodeIndex(node) {
+                if (node.className.baseVal === 'node') {
+                    return node.dataset.index
+                }
+                if (node.className.baseVal === 'nodes') {
+                    return undefined
+                }
+                return getNodeIndex(node.parentNode)
+            }
+
+            let div = document.getElementById('svgtooltip')
+            if (!div) {
+                div = document.createElement('div')
+                div.id = 'svgtooltip'
+                document.body.appendChild(div)
+            }
+            const index = getNodeIndex(e.target)
+            if (index !== undefined) {
+                const nodeData = allNodes[index];
+                const content = toolTipRender ? toolTipRender(nodeData, div) : nodeData.title ? nodeData.title : ''
+                if (!content) {
+                    return
+                }
+                if (content instanceof Promise) {
+                    div.innerHTML = '加载中'
+                    flowNodes._promise = content
+                    content.then(d => {
+                        if (flowNodes._promise === content) { //保护当前promise对象
+                            div.innerHTML = d
+                        }
+                    }, e => {
+                        if (flowNodes._promise === content) {
+                            div.style.display = 'none'
+                        }
+                    })
+                } else {
+                    div.innerHTML = content
+                }
+                let divX, divY
+                const divRect = div.getBoundingClientRect()
+                xdirect = e.pageX + 15 + divRect.width - (document.documentElement.scrollLeft + document.documentElement.clientWidth) > 0 ? 'left' : 'right'
+                divX = xdirect === 'left' ? e.pageX - 10 - div.offsetWidth : e.pageX + 15
+                ydirect = e.pageY + 15 + divRect.height - (document.documentElement.scrollTop + document.documentElement.clientHeight) > 0 ? 'top' : 'bottom'
+                divY = ydirect === 'top' ? e.pageY - 10 - div.offsetHeight : e.pageY + 15
+                div.style.transform = `translate(${divX}px,${divY}px)`;
+                div.style.opacity = '1'
+                div.style.display = 'block'
+            }
+        }
+        flowNodes.onmouseout = function (e) {
+            let div = document.getElementById('svgtooltip')
+            if (div) {
+                div.style.opacity = '0'
+            }
+        }
     }
 
-    createFlow(data, 'flowChart')
+    createFlow(document.getElementById('flowChart'), data, (nodeData, div) => {
+        // return `<div>${nodeData.label}</div>`
+        return new Promise(cb => {
+            setTimeout(() => {
+                cb(`<div>${nodeData.label}</div>`)
+            }, 2000);
+        })
+    })
+
+
 
 </script>
 
