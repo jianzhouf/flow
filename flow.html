@@ -13,11 +13,6 @@
             stroke-width: 2px;
         }
 
-        .edgePath polyline {
-            stroke: #18a4da;
-            stroke-width: 1.5px;
-        }
-
         .node rect {
             fill: white;
             stroke-width: 1.5px;
@@ -100,24 +95,20 @@
                 label: '分群包（1500）',
                 children: [
                     {
-                        label: '分群1包（700）',
-                        condition: '哈sidf',
+                        label: '分',
+                        condition: '啦啦啦啊',
                         children: [{
-                            label: '大夫',
+                            label: '大',
                             children: [{ label: 'END', type: 'end' },
                             {
-                                label: '大夫大夫大夫',
-                                children: [
-                                    { label: '嗲吃发的士阿斯顿' },
-                                    { label: '啊互粉的' },
-                                    { label: '啊互粉的fdas' }
-                                ]
+                                label: '大',
+
                             }]
-                        }, { label: '大夫大夫大夫大夫大夫大夫大夫大夫', children: [{ label: 'END', type: 'end' }] }]
+                        }]
                     },
                     {
-                        label: '分群2包（800）',
-                        children: [{ label: '发 i 多久啊发都十', children: [{ label: '哈哈 i 的方法 i' }] }]
+                        label: '分',
+                        children: [{ label: '发', children: [{ label: '哈' }] }]
                     }, {
                         label: 'END',
                         type: 'end'
@@ -136,10 +127,12 @@
         const fontGutter = 5
         const rectStrokeWidth = 1.5 //块border宽度 用于计算 line的起始坐标 需要 rectY + rectHeight + rectStrokeWidth/2
         const rectHeight = 40
+        const strokeWidth = 2
         const arrowOriginHeight = 5
-        const endNodeLine = 60
+        const endNodeLine = 40
         let rects = ""
         let lines = ""
+        let minX = 0;
         //计算文本宽／高属性
         function messureText(content, className) {
             const span = document.createElement('span')
@@ -157,7 +150,7 @@
         }
 
         //计算节点坐标
-        function coordinate(data, level = 0, initialX = 1, realWidth) {
+        function coordinate(data, level = 0, initialX = 0, realWidth, more = false) {
 
             // 对于end节点做处理
             for (const node of data) {
@@ -171,29 +164,30 @@
             }
 
             // 计算坐标
-            for (const node of data) {
+            for (let i = 0; i < data.length; i++) {
+                const node = data[i]
                 const rectWidth = messureText(cutText(node.label), 'messure').width
                 node.rectWidth = rectWidth
                 node.x = initialX
                 node.y = level * verticalGuttter + rectStrokeWidth / 2
-                maxHeight = Math.max(maxHeight, node.y + rectHeight + rectStrokeWidth / 2)
                 node.level = level
                 node.realWidth = Math.max(realWidth || 0, rectWidth)
-
                 //end 节点 方向设置， 以及实际宽度 增加
                 if (node.endVO) {
                     if (node.children.length === 0) {
                         node.endDirect = 'bottom'
-                    } else if (level !== 0 && data.length > 1 && node.x === 1) {
+                    } else if (more && i == 0) {
                         node.endDirect = 'left'
                     } else {
                         node.endDirect = 'right'
-                        node.realWidth = Math.max(node.realWidth, node.rectWidth + endNodeLine + arrowOriginHeight * rectStrokeWidth + messureText(node.endVO.label || 'END', 'noPaddingMessure').width)
+                        node.realWidth = Math.max(node.realWidth, node.rectWidth + endNodeLine + arrowOriginHeight * strokeWidth + messureText(node.endVO.label || 'END', 'merssure').width)
                     }
                 }
-
                 if (node.children && node.children.length > 0) {
-                    coordinate(node.children, level + 1, initialX, realWidth)
+                    if (node.children.length > 1) {
+                        more = true;
+                    }
+                    coordinate(node.children, level + 1, initialX, realWidth, more)
                     let newX = initialX
                     for (const item of node.children) {
                         newX += item.realWidth + gutter
@@ -208,12 +202,31 @@
             for (const node of data) {
                 if (node.children && node.children.length > 0) {
                     moveToCenter(node.children)
-                    maxWidth = Math.max(maxWidth, node.x + node.realWidth)
                     var start = node.children[0].x + node.children[0].rectWidth / 2
                     var end = node.children[node.children.length - 1].x + node.children[node.children.length - 1].rectWidth / 2
                     node.x = (start + end - node.rectWidth) / 2
+
+                    //计算产生最小的x坐标
+                    if (node.endDirect == 'left') {
+                        const endBlockWidth = messureText(node.endVO.label || 'END', 'messure').width
+                        const endX = node.x - (endBlockWidth + endNodeLine + 3 / 2 * rectStrokeWidth + arrowOriginHeight * strokeWidth);
+                        minX = Math.min(endX, minX)
+                    } else {
+                        minX = Math.min(node.x, minX)
+                    }
                 }
             }
+        }
+        function changeX(data) {
+            for (const node of data) {
+                if (node.x != undefined) {
+                    node.x = node.x - minX + rectStrokeWidth / 2
+                }
+                if (node.children) {
+                    changeX(node.children)
+                }
+            }
+
         }
 
         let allNodes = []
@@ -226,6 +239,8 @@
                         <tspan dy="1em">${cutText(node.label)}</tspan>
                     </text>
                 </g></g>`
+                maxWidth = Math.max(maxWidth, node.x + node.rectWidth)
+                maxHeight = Math.max(maxHeight, node.y + rectHeight + rectStrokeWidth / 2)
                 if (node.children) {
                     drawBlock(node.children)
                 }
@@ -246,7 +261,7 @@
                         const condition = child.condition || '任意'
                         const conditionWidth = messureText(condition, 'noPaddingMessure').width
                         const conditionHeight = messureText(condition, 'noPaddingMessure').height
-                        let realLineHeight = verticalGuttter - rectHeight - rectStrokeWidth - arrowOriginHeight * Math.round(rectStrokeWidth)
+                        let realLineHeight = verticalGuttter - rectHeight - rectStrokeWidth - arrowOriginHeight * strokeWidth
                         if (num == 1) {
                             str = `v${realLineHeight}`
                             fx = cx + fontGutter
@@ -254,13 +269,15 @@
                         }
                         if (num == 2) {
                             realLineHeight -= 12
-                            if (cx > px) {
-                                str = `v${realLineHeight / 2} c0 0 0 6 6 6 h${cx - px - 12} c0 0 6 0 6 6 v${realLineHeight / 2}`
-                            } else {
-                                str = `v${realLineHeight / 2} c0 0 0 6 -6 6 h${cx - px + 12} c0 0 -6 0 -6 6 v${realLineHeight / 2}`
-                            }
                             fx = (px + cx) / 2 - conditionWidth / 2
                             fy = cy - realLineHeight / 2 - conditionHeight - fontGutter
+                            if (cx > px) {
+                                fx = fx < px ? px + 10 : fx
+                                str = `v${realLineHeight / 2} c0 0 0 6 6 6 h${cx - px - 12} c0 0 6 0 6 6 v${realLineHeight / 2}`
+                            } else {
+                                fx = fx + conditionWidth > px ? px - fontGutter - conditionWidth : fx
+                                str = `v${realLineHeight / 2} c0 0 0 6 -6 6 h${cx - px + 12} c0 0 -6 0 -6 6 v${realLineHeight / 2}`
+                            }
                         }
                         if (num == 3) {
                             if (i === 0 || i === node.children.length - 1) {
@@ -294,16 +311,38 @@
         function drawEnd(data) {
             for (const node of data) {
                 if (node.endVO) {
-                    let ex, ey, str, fx, fy;
                     const condition = node.endVO.condition || '拒绝'
                     const conditionWidth = messureText(condition, 'noPaddingMessure').width
                     const conditionHeight = messureText(condition, 'noPaddingMessure').height
-                    let realLineHeight = verticalGuttter - rectHeight - rectStrokeWidth - arrowOriginHeight * Math.round(rectStrokeWidth)
+                    let sx, sy
+                    const endBlockWidth = messureText(node.endVO.label || 'END', 'messure').width
+                    if (node.endDirect === 'bottom') {
+                        sx = node.x + node.rectWidth / 2 - endBlockWidth / 2;
+                        sy = (node.level + 1) * verticalGuttter + rectStrokeWidth / 2
+                    } else if (node.endDirect === 'left') {
+                        sx = node.x - (endBlockWidth + endNodeLine + arrowOriginHeight * strokeWidth);
+                        sy = node.y;
+                    } else {
+                        sx = node.x + node.rectWidth + endNodeLine + rectStrokeWidth / 2 + arrowOriginHeight * strokeWidth
+                        sy = node.y;
+                    }
+
+
+                    rects += `<g class="node endnode">
+                            <rect rx="6" ry="6" x=${sx} y=${sy} width=${endBlockWidth} height=${rectHeight}></rect>
+                            <g transform="translate(${sx + 10},${sy + 10})">
+                                <text>
+                                    <tspan dy="1em">${node.endVO.label || 'END'}</tspan>
+                                </text>
+                            </g>
+                        </g>`
+                    let ex, ey, str, fx, fy;
+                    let realLineHeight = verticalGuttter - rectHeight - rectStrokeWidth - arrowOriginHeight * strokeWidth
                     if (node.endDirect === 'bottom') {
                         ex = node.x + node.rectWidth / 2;
                         ey = node.y + rectHeight + rectStrokeWidth / 2;
                         fx = ex + fontGutter;
-                        fy = ey + realLineHeight / 2 - conditionHeight / 2;
+                        fy = sy - conditionHeight - realLineHeight / 2
                         str = `v${realLineHeight}`;
                     }
                     if (node.endDirect === 'left') {
@@ -328,26 +367,10 @@
                             </text>
                         </g>
                     </g>`
-                    let sx, sy
-                    const endBlockWidth = messureText(node.endVO.label || 'END', 'messure').width
-                    if (node.endDirect === 'bottom') {
-                        sx = node.x + node.rectWidth / 2 - endBlockWidth / 2;
-                        sy = node.y + verticalGuttter
-                    } else if (node.endDirect === 'left') {
-                        sx = node.x - (node.rectWidth + endNodeLine + 3 / 2 * rectStrokeWidth + arrowOriginHeight * Math.round(rectStrokeWidth));
-                        sy = node.y;
-                    } else {
-                        sx = node.x + node.rectWidth + endNodeLine + rectStrokeWidth / 2 + arrowOriginHeight * Math.round(rectStrokeWidth)
-                        sy = node.y;
-                    }
-                    rects += `<g class="node endnode">
-                            <rect rx="6" ry="6" x=${sx} y=${sy} width=${endBlockWidth} height=${rectHeight}></rect>
-                            <g transform="translate(${sx + 10},${sy + 10})">
-                                <text>
-                                    <tspan dy="1em">${node.endVO.label || 'END'}</tspan>
-                                </text>
-                            </g>
-                        </g>`
+
+                    //计算maxWidth
+                    maxWidth = Math.max(maxWidth, sx + endBlockWidth + rectStrokeWidth / 2)
+                    maxHeight = Math.max(maxHeight, node.y + rectHeight + rectStrokeWidth / 2)
                 }
                 if (node.children && node.children.length > 0) {
                     drawEnd(node.children)
@@ -356,6 +379,8 @@
         }
         coordinate(data)
         moveToCenter(data)
+        console.log(data)
+        changeX(data)
         drawLine(data)
         drawBlock(data)
         drawEnd(data)
@@ -426,12 +451,12 @@
     }
 
     createFlow(document.getElementById('flowChart'), data, (nodeData, div) => {
-        // return `<div>${nodeData.label}</div>`
-        return new Promise(cb => {
-            setTimeout(() => {
-                cb(`<div>${nodeData.label}</div>`)
-            }, 2000);
-        })
+        return `<div>${nodeData.label}</div>`
+        // return new Promise(cb => {
+        //     setTimeout(() => {
+        //         cb(`<div>${nodeData.label}</div>`)
+        //     }, 2000);
+        // })
     })
 
 
