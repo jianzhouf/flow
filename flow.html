@@ -88,32 +88,32 @@
 <script>
 
     const data = [{
-        label: '规则包',
-        title: 'haha',
+        label: '拒绝包（3000）',
         children: [
             {
                 label: '分群包（1500）',
+                condition: '通过',
                 children: [
                     {
-                        label: '分',
-                        condition: '啦啦啦啊',
-                        children: [{
-                            label: '大',
-                            children: [{ label: 'END', type: 'end' },
+                        label: '评分包（2000）',
+                        condition: '通过',
+                        children: [
                             {
-                                label: '大',
-
-                            }]
-                        }]
+                                label: '分群包（1500）',
+                                children: [
+                                    { label: '分群1包（800）', condition: '分群1', children: [{ label: '集奥（800）', children: [{ type: 'end' }] }] },
+                                    { label: '分群2包（700）', condition: '分群2', children: [{ label: '同盾包（700）', condition: '任意', children: [{ label: '百度包（800）', condition: '通过', children: [{ label: '人审包（800）', condition: '通过', children: [{ label: '人审系统', condition: '需人审' }, { type: 'end' }] }] }, { type: 'end' }] }] }
+                                ]
+                            }
+                        ]
                     },
                     {
-                        label: '分',
-                        children: [{ label: '发', children: [{ label: '哈' }] }]
-                    }, {
-                        label: 'END',
                         type: 'end'
                     }
                 ]
+            },
+            {
+                type: 'end'
             }
         ]
     }]
@@ -150,7 +150,7 @@
         }
 
         //计算节点坐标
-        function coordinate(data, level = 0, initialX = 0, realWidth, more = false) {
+        function coordinate(data, level = 0, initialX = 0, realWidth) {
 
             // 对于end节点做处理
             for (const node of data) {
@@ -176,18 +176,13 @@
                 if (node.endVO) {
                     if (node.children.length === 0) {
                         node.endDirect = 'bottom'
-                    } else if (more && i == 0) {
-                        node.endDirect = 'left'
                     } else {
                         node.endDirect = 'right'
                         node.realWidth = Math.max(node.realWidth, node.rectWidth + endNodeLine + arrowOriginHeight * strokeWidth + messureText(node.endVO.label || 'END', 'merssure').width)
                     }
                 }
                 if (node.children && node.children.length > 0) {
-                    if (node.children.length > 1) {
-                        more = true;
-                    }
-                    coordinate(node.children, level + 1, initialX, realWidth, more)
+                    coordinate(node.children, level + 1, initialX, realWidth)
                     let newX = initialX
                     for (const item of node.children) {
                         newX += item.realWidth + gutter
